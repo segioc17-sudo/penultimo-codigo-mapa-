@@ -1,4 +1,3 @@
-// App.jsx
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   MapContainer,
@@ -8,6 +7,7 @@ import {
   useMap,
   useMapEvent,
   CircleMarker,
+  ZoomControl,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -58,6 +58,71 @@ const styles = {
     background: "#0b1224",
     position: "relative",
   },
+
+  /* ===== SPLASH (solo visual) ===== */
+  splash: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 99999,
+    display: "grid",
+    placeItems: "center",
+    background: "#050b18",
+    color: "#e6eef8",
+    pointerEvents: "none",
+    overflow: "hidden",
+  },
+  splashCenter: { textAlign: "center", padding: "28px 24px", position: "relative" },
+  splashTitle: {
+    fontSize: "clamp(72px, 14vw, 160px)",
+    fontWeight: 1000,
+    letterSpacing: 0.6,
+    marginBottom: 12,
+    lineHeight: 1,
+    background:
+      "linear-gradient(90deg, #9fc5ff 0%, #5bd5ff 25%, #a48bff 60%, #9fc5ff 100%)",
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    color: "transparent",
+    textShadow: "0 4px 30px rgba(96,165,250,0.15)",
+  },
+  splashSubtitle: { fontSize: "clamp(14px, 2.2vw, 18px)", color: "#a7bed2", marginBottom: 18 },
+  splashLoaderTrack: {
+    width: "min(420px, 70vw)",
+    height: 3,
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.10)",
+    margin: "10px auto 0",
+    overflow: "hidden",
+  },
+  splashLoaderBar: {
+    width: "38%",
+    height: "100%",
+    borderRadius: 9999,
+    background: "linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",
+    animation: "barSlide 1.6s ease-in-out infinite",
+  },
+  jjssWrap: {
+    marginTop: 18,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 14px",
+    borderRadius: 9999,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.35), inset 0 0 30px rgba(99,102,241,0.08)",
+    backdropFilter: "blur(10px)",
+  },
+  jjssMonogram: {
+    display: "inline-flex",
+    gap: 6,
+    fontWeight: 900,
+    letterSpacing: 1,
+    fontSize: "clamp(18px, 3.2vw, 28px)",
+    lineHeight: 1,
+  },
+
+  /* ===== SIDEBAR / MAP UI ===== */
   sidebar: {
     position: "absolute",
     left: 0,
@@ -69,7 +134,7 @@ const styles = {
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     color: "#e6eef8",
-    padding: 16,
+    padding: "60px 16px 16px",
     display: "flex",
     flexDirection: "column",
     gap: 12,
@@ -80,37 +145,33 @@ const styles = {
     transition: "transform .3s ease, opacity .3s ease",
     opacity: 0,
   },
-  sidebarOpen: {
-    transform: "translateX(0)",
-    opacity: 1,
+  sidebarOpen: { transform: "translateX(0)", opacity: 1 },
+  closeFab: {
+    position: "absolute",
+    right: -18,
+    top: 14,
+    width: 36,
+    height: 36,
+    borderRadius: "9999px",
+    border: "2px solid rgba(255,255,255,0.9)",
+    background: "rgba(2,10,28,0.96)",
+    color: "#e6eef8",
+    cursor: "pointer",
+    boxShadow: "0 10px 28px rgba(0,0,0,0.7)",
+    zIndex: 4500,
+    display: "grid",
+    placeItems: "center",
+    transition: "transform .08s ease, box-shadow .2s ease, background .2s ease",
+    backdropFilter: "blur(6px)",
   },
   title: { color: "#60a5fa", fontSize: 18, fontWeight: 800, letterSpacing: 0.2 },
   small: { color: "#9fb4c9", fontSize: 12.5 },
   mapWrap: { flex: 1, position: "relative", minWidth: 0 },
-  floatingControls: {
-    position: "absolute",
-    right: 16,
-    top: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    zIndex: 9999,
-  },
-  fab: {
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.08)",
-    cursor: "pointer",
-    background: "rgba(255,255,255,0.06)",
-    color: "#e6eef8",
-    backdropFilter: "blur(4px)",
-  },
-  // Botón hamburguesa más visible
   hamburger: {
     position: "absolute",
-    left: 12,
-    top: 12,
-    zIndex: 10000,
+    left: 16,
+    top: 16,
+    zIndex: 3500,
     padding: "12px 14px",
     borderRadius: 14,
     border: "2px solid rgba(255,255,255,0.9)",
@@ -127,20 +188,42 @@ const styles = {
     right: 12,
     bottom: 14,
     zIndex: 9999,
-    background: "linear-gradient(180deg, rgba(8,10,14,0.85), rgba(4,6,12,0.95))",
+    background: "linear-gradient(180deg, rgba(8,10,14,0.9), rgba(4,6,12,0.97))",
     borderRadius: 14,
     padding: 12,
-    boxShadow: "0 8px 30px rgba(2,6,23,0.6)",
+    boxShadow: "0 8px 34px rgba(2,6,23,0.7)",
     color: "#e6eef8",
     display: "flex",
     gap: 14,
-    alignItems: "center",
+    alignItems: "stretch",
     transition: "transform .2s ease, opacity .2s ease, left .25s ease",
-    border: "1px solid rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    minWidth: 320,
+    maxWidth: "min(92vw, 920px)",
   },
-  bottomLeft: { flex: 1, minWidth: 0 },
-  instrBox: { marginTop: 6, fontSize: 14, color: "#cfe8ff" },
-  subtle: { color: "#86a6bf", fontSize: 12 },
+  bottomLeft: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" },
+  instrList: {
+    marginTop: 8,
+    maxHeight: 220,
+    overflowY: "auto",
+    paddingRight: 6,
+    scrollBehavior: "smooth",
+  },
+  instrItem: {
+    fontSize: 14,
+    lineHeight: 1.25,
+    padding: "8px 10px",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    cursor: "pointer",
+  },
+  instrItemActive: {
+    background: "rgba(96,165,250,0.16)",
+    border: "1px solid rgba(96,165,250,0.55)",
+    boxShadow: "0 0 0 2px rgba(96,165,250,0.25) inset",
+  },
+  chipTab: { cursor: "pointer", userSelect: "none" },
 };
 
 // ================== Utils ==================
@@ -153,8 +236,44 @@ function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
-const formatDistance = (m) => (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`);
-const formatTimeMin = (s) => `${(s / 60).toFixed(1)} min`;
+const formatDistanceBOG = (m) => {
+  if (!Number.isFinite(m)) return "—";
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${Math.round(m / 1000)} km`;
+};
+const formatDurationBOG = (seconds) => {
+  if (!Number.isFinite(seconds)) return "—";
+  const totalMin = Math.max(0, Math.round(seconds / 60));
+  if (totalMin < 60) return `${Math.max(1, totalMin)} min`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+};
+
+// —— convertir metros a grados (aprox) para generar vias
+const metersToDeg = (lat, dx, dy) => {
+  const mPerDegLat = 111320;
+  const mPerDegLon = 111320 * Math.cos(toRad(lat));
+  return { dLat: dy / mPerDegLat, dLon: dx / mPerDegLon };
+};
+
+// ======= Estimación de TIEMPO “real” para Bogotá =======
+function bogotaSpeedKmh(mode, now = new Date()) {
+  if (mode === "walk") return 4.8;
+  const h = now.getHours();
+  const d = now.getDay();
+  const weekend = d === 0 || d === 6;
+  if (weekend) { if (h >= 11 && h < 20) return 26; return 32; }
+  if ((h >= 6 && h < 9) || (h >= 16 && h < 20)) return 22;
+  if (h >= 9 && h < 16) return 28;
+  return 34;
+}
+function estimateBogotaTimeSec(distance_m, mode) {
+  const v = bogotaSpeedKmh(mode);
+  const metersPerSec = (v * 1000) / 3600;
+  const secs = distance_m / Math.max(1e-6, metersPerSec);
+  return Math.max(60, Math.round(secs));
+}
 
 // ================== Hook de voz simple ==================
 function useVoice(lang = "es-CO", rate = 1, pitch = 1) {
@@ -219,6 +338,7 @@ function GenericRoutingMachine({
   speakEnabled = false,
   fitSelected = true,
   isPreview = false,
+  viaPoints = [],
 }) {
   const map = useMap();
   const controlRef = useRef(null);
@@ -273,7 +393,8 @@ function GenericRoutingMachine({
 
     if (controlRef.current) {
       try {
-        controlRef.current.setWaypoints([L.latLng(start[0], start[1]), L.latLng(end[0], end[1])]);
+        const wps = [L.latLng(start[0], start[1]), ...viaPoints.map(v => L.latLng(v[0], v[1])), L.latLng(end[0], end[1])];
+        controlRef.current.setWaypoints(wps);
         return;
       } catch {
         try { map.removeControl(controlRef.current); } catch {}
@@ -287,17 +408,17 @@ function GenericRoutingMachine({
     });
 
     const previewStyles = [
-      { color: "rgba(34,211,238,0.25)", weight: 12, opacity: 1 },
+      { color: "rgba(34,211,238,0.28)", weight: 12, opacity: 1 },
       { color: "#22d3ee", weight: 7, opacity: 1 },
       { color: "#a78bfa", weight: 3, opacity: 1, dashArray: "8,8" }
     ];
 
     const activeStyles = mode === "walk"
-      ? [{ color: "#f59e0b", weight: 7, opacity: 0.95, dashArray: "8,8" }]
-      : [{ color: "#14b8a6", weight: 7, opacity: 0.95 }];
+      ? [{ color: "#f59e0b", weight: 7, opacity: 0.97, dashArray: "8,8" }]
+      : [{ color: "#14b8a6", weight: 7, opacity: 0.97 }];
 
     const rc = L.Routing.control({
-      waypoints: [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])],
+      waypoints: [L.latLng(start[0], start[1]), ...viaPoints.map(v => L.latLng(v[0], v[1])), L.latLng(end[0], end[1])],
       router,
       showAlternatives: false,
       routeWhileDragging: false,
@@ -313,9 +434,8 @@ function GenericRoutingMachine({
         const coords = (r.coordinates || []).map(c => ({ lat: c.lat, lng: c.lng }));
         const distance = r.summary?.totalDistance || 0;
 
-        // Tiempo estimado simple por modo
-        const speed_m_s = mode === "walk" ? 1.3889 : 11.1111;
-        const time = Math.round(distance / speed_m_s);
+        // tiempo “realista” Bogotá
+        const time = estimateBogotaTimeSec(distance, mode);
 
         const raw = r.instructions || [];
         const steps = (raw || []).map((ins, idx) => ({
@@ -330,7 +450,7 @@ function GenericRoutingMachine({
         onRoute && onRoute({ coords, distance, time, summary: r.summary, instructions: steps });
         onInstructions && onInstructions(msgs);
 
-        if (!isPreview && msgs.length > 0) speak(`Ruta lista. ${msgs[0].human}`);
+        if (!isPreview && msgs.length > 0) speak(`iniciemos el viaje. ${msgs[0].human}`);
       })
       .on("routingerror", () => {
         onInstructions && onInstructions([{ id: 0, human: "No se pudo calcular la ruta (OSRM)." }]);
@@ -338,23 +458,27 @@ function GenericRoutingMachine({
       .addTo(map);
 
     controlRef.current = rc;
-    return () => {
+  return () => {
       if (controlRef.current) { try { map.removeControl(controlRef.current); } catch {} controlRef.current = null; }
     };
-  }, [start, end, mode, map, onRoute, onInstructions, speakEnabled, isPreview, fitSelected]);
+  }, [start, end, mode, map, onRoute, onInstructions, speakEnabled, isPreview, fitSelected, viaPoints]);
 
   return null;
 }
 
 // ================== Componente principal ==================
 export default function App() {
+  // Splash (duración)
+  const SPLASH_MS = 3200;
+  const [showSplash, setShowSplash] = useState(true);
+
   // datos
   const [events, setEvents] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
-  // --------- filtros (simplificado: SOLO localidad) ---------
+  // filtros
   const [localidadText, setLocalidadText] = useState("");
 
   // routing / ui
@@ -380,17 +504,23 @@ export default function App() {
   const [riskComments, setRiskComments] = useState([]);
   const [riskLevel, setRiskLevel] = useState("—");
 
-  const [followPosition, setFollowPosition] = useState(false);
   const [proximityMeters, setProximityMeters] = useState(300);
   const [showInstructions, setShowInstructions] = useState(true);
-  const watchRef = useRef(null);
-  const mapRef = useRef(null);
 
-  // Sidebar toggle (cerrado por defecto)
+  // Panel inferior ("summary" | "instructions")
+  const [bottomMode, setBottomMode] = useState("summary");
+
+  // Coordenada del paso bajo hover
+  const [hoveredStepLatLng, setHoveredStepLatLng] = useState(null);
+
+  const mapRef = useRef(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // voz
+  // voz  **FIX AQUÍ**
   const { supported: voiceSupported, voicesReady, speak, stop } = useVoice("es-CO", 1, 1);
+
+  // via points
+  const [viaPoints, setViaPoints] = useState([]);
 
   // ======= Fix 100vh móviles =======
   useEffect(() => {
@@ -404,7 +534,13 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // ======= Cargar delitos =======
+  // ======= Mostrar splash =======
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), SPLASH_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  // ======= Cargar datos =======
   useEffect(() => {
     const load = async () => {
       setLoading(true); setLoadError(null);
@@ -444,7 +580,7 @@ export default function App() {
         }
         const valid = data.filter(e => Number.isFinite(e.lat) && Number.isFinite(e.lon));
         setEvents(valid); setFiltered(valid);
-      } catch (e1) {
+      } catch {
         try {
           const res2 = await api.get("/api/delitos");
           const data2 = (Array.isArray(res2.data) ? res2.data : []).map((d, idx) => ({
@@ -468,9 +604,7 @@ export default function App() {
           setEvents([]); setFiltered([]);
           setLoadError("No se pudieron cargar los datos.");
         }
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     };
     load();
   }, []);
@@ -483,15 +617,86 @@ export default function App() {
     [filtered]
   );
 
-  // ======= Filtros reactivos: SOLO Localidad =======
+  // ======= Filtros =======
   useEffect(() => {
     let tmp = [...events];
-    if (localidadText) {
-      const s = localidadText.toLowerCase();
-      tmp = tmp.filter((e) => (e.barrio || "").toLowerCase().includes(s));
-    }
+    const s = (localidadText || "").toLowerCase();
+    if (s) tmp = tmp.filter((e) => (e.barrio || "").toLowerCase().includes(s));
     setFiltered(tmp);
   }, [events, localidadText]);
+
+  // ===== helpers de riesgo =====
+  const computeNearestEventToRoute = useCallback((coords) => {
+    if (!coords?.length) return null;
+    const sampleStep = Math.max(1, Math.floor(coords.length / 800));
+    let nearest = null;
+    for (const ev of filtered) {
+      let minDist = Infinity;
+      for (let i = 0; i < coords.length; i += sampleStep) {
+        const p = coords[i];
+        const d = haversineDistanceMeters(p.lat, p.lng, ev.lat, ev.lon);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist < (nearest?.dist ?? Infinity)) nearest = { ev, dist: Math.round(minDist) };
+    }
+    return nearest;
+  }, [filtered]);
+
+  const routeRiskScore = useCallback((poly, bufferM = 300) => {
+    if (!poly?.length || filtered.length === 0) return 0;
+    const step = Math.max(1, Math.floor(poly.length / 500));
+    let score = 0;
+    for (let i = 0; i < poly.length; i += step) {
+      const p = poly[i];
+      for (const ev of filtered) {
+        const d = haversineDistanceMeters(p.lat, p.lng, ev.lat, ev.lon);
+        if (d <= bufferM) score += 1 / (d + 1);
+      }
+    }
+    return score;
+  }, [filtered]);
+
+  const suggestAlternateVia = useCallback(() => {
+    const data = isStarted ? route : previewRoute;
+    if (!data?.coords?.length || !startLoc || !endLoc) return null;
+
+    const nearest = computeNearestEventToRoute(data.coords);
+    if (!nearest?.ev) return null;
+
+    const ev = nearest.ev;
+    const R = Math.max(proximityMeters + 200, 300);
+    const K = 12;
+    const candidates = [];
+    for (let k = 0; k < K; k++) {
+      const ang = (2 * Math.PI * k) / K;
+      const { dLat, dLon } = metersToDeg(ev.lat, R * Math.cos(ang), R * Math.sin(ang));
+      const cand = [ev.lat + dLat, ev.lon + dLon];
+      candidates.push(cand);
+    }
+
+    const quickPolyline = (a, b, segments = 50) => {
+      const out = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        out.push({ lat: a[0] + (b[0] - a[0]) * t, lng: a[1] + (b[1] - a[1]) * t });
+      }
+      return out;
+    };
+
+    let best = null;
+    for (const cand of candidates) {
+      const seg1 = quickPolyline(startLoc, cand, 80);
+      const seg2 = quickPolyline(cand, endLoc, 80);
+      const polyApprox = [...seg1, ...seg2];
+      const sc = routeRiskScore(polyApprox, Math.max(250, proximityMeters));
+      const d1 = haversineDistanceMeters(startLoc[0], startLoc[1], cand[0], cand[1]);
+      const d2 = haversineDistanceMeters(cand[0], cand[1], endLoc[0], endLoc[1]);
+      const lenPenalty = 0.0005 * (d1 + d2);
+      const totalScore = sc + lenPenalty;
+      if (!best || totalScore < best.totalScore) best = { via: cand, totalScore };
+    }
+    return best?.via || null;
+  }, [isStarted, route, previewRoute, startLoc, endLoc, computeNearestEventToRoute, routeRiskScore, proximityMeters]);
 
   // ======= Riesgo PREVIEW =======
   useEffect(() => {
@@ -505,47 +710,28 @@ export default function App() {
         const p = coords[i];
         const d = haversineDistanceMeters(p.lat, p.lng, ev.lat, ev.lon);
         if (d < minDist) minDist = d;
-        if (minDist <= 0) break;
       }
       if (minDist <= proximityMeters) {
         if (!nearest || minDist < nearest.dist) nearest = { ev, dist: Math.round(minDist) };
       }
     }
-    if (!nearest) {
-      setPreviewRiskComments([{ text: "🟢 Sin eventos cercanos (riesgo bajo)", ev: null, dist: null }]);
-      setPreviewRiskLevel("Bajo ✅");
-    } else {
+    if (!nearest) { setPreviewRiskComments([{ text: "🟢 Sin eventos cercanos (riesgo bajo)", ev: null, dist: null }]); setPreviewRiskLevel("Bajo ✅"); }
+    else {
       const d = nearest.dist;
       let level = "Bajo ✅", badge = "🟢";
       if (d < 100) { level = "Alto 🔴"; badge = "🔴"; }
-      else if (d >= 100 && d <= 300) { level = "Medio 🟡"; badge = "🟡"; }
-      const text = `${badge} ${nearest.ev.type} a ${formatDistance(d)} de la ruta (${level.toLowerCase()}) — ${nearest.ev.barrio || "zona desconocida"}`;
+      else if (d <= 300) { level = "Medio 🟡"; badge = "🟡"; }
+      const text = `${badge} ${nearest.ev.type} a ${formatDistanceBOG(d)} de la ruta (${level.toLowerCase()}) — ${nearest.ev.barrio || "zona desconocida"}`;
       setPreviewRiskComments([{ text, ev: nearest.ev, dist: d }]);
       setPreviewRiskLevel(level);
     }
-
-    // consulta al modelo (preview)
-    try {
-      const step = Math.max(1, Math.floor((previewRoute.coords?.length || 1) / 200));
-      const pts = (previewRoute.coords || []).filter((_, i) => i % step === 0).map(p => [p.lat, p.lng]);
-      api.post("/api/predict_route_risk", { points: pts })
-        .then(({ data }) => {
-          if (data?.nivel_riesgo) {
-            setPreviewRiskComments(prev => [
-              { text: `🧠 Modelo: riesgo ${data.nivel_riesgo} (score ${data.puntuacion})` },
-              ...(prev || []),
-            ].slice(0, 2));
-          }
-        })
-        .catch(() => {});
-    } catch {}
   }, [previewRoute, filtered, proximityMeters]);
 
   // ======= Riesgo ACTIVO =======
   useEffect(() => {
     if (!route?.coords?.length) { setRiskComments([]); setRiskLevel("—"); return; }
     const coords = route.coords;
-    const sampleStep = Math.max(1, Math.floor(coords.length / 800));
+    const sampleStep = Math.max(1, Math.floor(route.coords.length / 800));
     let nearest = null;
     for (const ev of filtered) {
       let minDist = Infinity;
@@ -553,21 +739,18 @@ export default function App() {
         const p = coords[i];
         const d = haversineDistanceMeters(p.lat, p.lng, ev.lat, ev.lon);
         if (d < minDist) minDist = d;
-        if (minDist <= 0) break;
       }
       if (minDist <= proximityMeters) {
         if (!nearest || minDist < nearest.dist) nearest = { ev, dist: Math.round(minDist) };
       }
     }
-    if (!nearest) {
-      setRiskComments([{ text: "🟢 Sin eventos cercanos (riesgo bajo)", ev: null, dist: null }]);
-      setRiskLevel("Bajo ✅");
-    } else {
+    if (!nearest) { setRiskComments([{ text: "🟢 Sin eventos cercanos (riesgo bajo)", ev: null, dist: null }]); setRiskLevel("Bajo ✅"); }
+    else {
       const d = nearest.dist;
       let level = "Bajo ✅", badge = "🟢";
       if (d < 100) { level = "Alto 🔴"; badge = "🔴"; }
-      else if (d >= 100 && d <= 300) { level = "Medio 🟡"; badge = "🟡"; }
-      const text = `${badge} ${nearest.ev.type} a ${formatDistance(d)} de tu ruta (${level.toLowerCase()}) — ${nearest.ev.barrio || "zona desconocida"}`;
+      else if (d <= 300) { level = "Medio 🟡"; badge = "🟡"; }
+      const text = `${badge} ${nearest.ev.type} a ${formatDistanceBOG(d)} de tu ruta (${level.toLowerCase()}) — ${nearest.ev.barrio || "zona desconocida"}`;
       setRiskComments([{ text, ev: nearest.ev, dist: d }]);
       setRiskLevel(level);
     }
@@ -587,49 +770,8 @@ export default function App() {
     setActiveInstructionIndex(newIdx);
   }, [route, instructions]);
 
-  // ======= Geolocalización seguir =======
-  const toggleFollow = () => {
-    if (!isStarted) {
-      alert("Primero inicia la ruta para seguir tu ubicación.");
-      return;
-    }
-    if (!followPosition) {
-      if (!("geolocation" in navigator)) { alert("Tu navegador no soporta geolocalización."); return; }
-      const id = navigator.geolocation.watchPosition((pos) => {
-        const coords = [pos.coords.latitude, pos.coords.longitude];
-        if (mapRef.current) { try { mapRef.current.setView(coords, 16, { animate: true }); } catch {} }
-        updateActiveInstructionByPosition(coords);
-      }, (err) => { console.warn("watch error", err); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 });
-      watchRef.current = id;
-      setFollowPosition(true);
-    } else {
-      if (watchRef.current != null) navigator.geolocation.clearWatch(watchRef.current);
-      watchRef.current = null;
-      setFollowPosition(false);
-    }
-  };
-
   // ======= Cuando llega la RUTA ACTIVA =======
-  const onRouteActive = useCallback((r) => {
-    setRoute(r);
-    setActiveInstructionIndex(0);
-    try {
-      const step = Math.max(1, Math.floor((r.coords?.length || 1) / 200));
-      const pts = (r.coords || []).filter((_, i) => i % step === 0).map(p => [p.lat, p.lng]);
-      api.post("/api/predict_route_risk", { points: pts })
-        .then(({ data }) => {
-          if (data?.nivel_riesgo) {
-            setRiskComments(prev => [
-              { text: `🧠 Modelo: riesgo ${data.nivel_riesgo} (score ${data.puntuacion})` },
-              ...(prev || []),
-            ].slice(0, 2));
-          }
-        })
-        .catch(() => {});
-    } catch {}
-  }, []);
-
-  // ======= Instrucciones ACTIVAS =======
+  const onRouteActive = useCallback((r) => { setRoute(r); setActiveInstructionIndex(0); }, []);
   const onInstructionsActive = useCallback((msgs) => {
     setInstructions(msgs || []);
     setActiveInstructionIndex(0);
@@ -660,9 +802,9 @@ export default function App() {
     setRiskComments([]);
     setRiskLevel("—");
     setEndLoc(null);
-    setFollowPosition(false);
-    if (watchRef.current != null) { try { navigator.geolocation.clearWatch(watchRef.current); } catch {} }
-    watchRef.current = null;
+    setBottomMode("summary");
+    setHoveredStepLatLng(null);
+    setViaPoints([]);
   };
 
   // ======= Reset a preview cuando cambian start/end/mode =======
@@ -673,6 +815,9 @@ export default function App() {
     setActiveInstructionIndex(0);
     setRiskComments([]);
     setRiskLevel("—");
+    setBottomMode("summary");
+    setHoveredStepLatLng(null);
+    setViaPoints([]);
   }, [startLoc?.[0], startLoc?.[1], endLoc?.[0], endLoc?.[1], mode]);
 
   // ======= Center on start changes =======
@@ -683,12 +828,6 @@ export default function App() {
   }, [startLoc]);
 
   // ======= Helpers UI =======
-  const riskLevelToPulse = (lvl) => {
-    if ((lvl || "").includes("Alto")) return "pulse-high";
-    if ((lvl || "").includes("Medio")) return "pulse-medium";
-    if ((lvl || "").includes("Bajo")) return "pulse-low";
-    return "";
-  };
   const riskLevelClass = (lvl) => {
     if ((lvl || "").includes("Alto")) return "panel-alert-high";
     if ((lvl || "").includes("Medio")) return "panel-alert-medium";
@@ -702,54 +841,6 @@ export default function App() {
     return "—";
   };
   const modeLabel = (m) => (m === "walk" ? "Caminando" : "Vehículo");
-  const levelKeyFromLabel = (lbl) =>
-    lbl === "ALTO" ? "high" : lbl === "MEDIO" ? "medium" : "low";
-  const riskAdvice = (lvl, currentMode) => {
-    if ((lvl || "").includes("Alto")) {
-      return currentMode === "walk"
-        ? "Evita calles poco iluminadas o solas. Mantente en avenidas principales, comparte tu ubicación y considera una ruta alternativa."
-        : "Prefiere vías principales e iluminadas. Evita detenerte; puertas y ventanas aseguradas. Considera una ruta alternativa.";
-    }
-    if ((lvl || "").includes("Medio")) {
-      return currentMode === "walk"
-        ? "Mantén atención al entorno y tus pertenencias. Evita atajos y zonas estrechas."
-        : "Conduce con precaución y evita calles estrechas. No te detengas innecesariamente.";
-    }
-    return currentMode === "walk"
-      ? "Ruta recomendable. Aun así, mantén atención al entorno."
-      : "Ruta recomendable. Conduce atento y respeta señales.";
-  };
-
-  // ======= Beep cuando el nivel pasa a ALTO =======
-  const lastAlertRef = useRef(false);
-  const playBeep = useCallback(() => {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = 880; // tono agudo
-      g.gain.setValueAtTime(0.001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-      o.connect(g); g.connect(ctx.destination);
-      o.start();
-      o.stop(ctx.currentTime + 0.27);
-      o.onended = () => ctx.close();
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    const lvl = isStarted ? riskLevel : previewRiskLevel;
-    const isHigh = (lvl || "").includes("Alto");
-    if (isHigh && !lastAlertRef.current) {
-      playBeep();
-      lastAlertRef.current = true;
-    } else if (!isHigh) {
-      lastAlertRef.current = false;
-    }
-  }, [isStarted, riskLevel, previewRiskLevel, playBeep]);
 
   // ======= ancho real sidebar (para mover el bottomPanel) =======
   const [sidebarWidth, setSidebarWidth] = useState(getSidebarWidth());
@@ -770,6 +861,40 @@ export default function App() {
         .leaflet-container { height: 100%; width: 100%; }
         @supports (height: 100svh) { :root { --vh: 1svh; } }
 
+        /* ===== Splash Animations ===== */
+        @keyframes fadeInUp { 0% { opacity: 0; transform: translateY(8px) scale(.985);} 100% { opacity:1; transform: none; } }
+        @keyframes barSlide { 0% { transform: translateX(-60%);} 100% { transform: translateX(160%);} }
+        @keyframes slowPan { 0% { transform: translate(-2%, -1%) scale(1.03);} 50% { transform: translate(2%, 1%) scale(1.04);} 100% { transform: translate(-2%, -1%) scale(1.03);} }
+        @keyframes heatDrift { 0% { transform: translate(-5%, -3%) scale(1.05);} 50% { transform: translate(6%, 4%) scale(1.08);} 100% { transform: translate(-5%, -3%) scale(1.05);} }
+
+        .splashTitleAnim { animation: fadeInUp .8s ease both; background-size: 220% 100%; }
+        .splashSubAnim  { animation: fadeInUp .8s ease .18s both; color:#a6b8cc !important; }
+
+        .bg-layer { position:absolute; inset:0; pointer-events:none; }
+        .heat { opacity:.35; filter: blur(30px) saturate(1.05); animation: heatDrift 22s ease-in-out infinite; }
+        .topo { opacity:.55; mix-blend-mode:screen; }
+        .topo > svg { width:140%; height:140%; animation: slowPan 26s ease-in-out infinite; }
+
+        .net { opacity:.75; filter: saturate(1.1); }
+        .route-base { fill:none; stroke-linecap:round; stroke-linejoin:round; opacity:.22; }
+        .route-progress { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+        .route-progress { stroke-dasharray: 0 2600; }
+        .route-car  { stroke:#4ec9ff; }
+        .route-walk { stroke:#f59e0b; }
+        .route-moto { stroke:#a78bfa; }
+
+        .car, .moto, .walker { filter: drop-shadow(0 4px 10px rgba(79,209,255,.35)); }
+        .car-body { fill:#ffffff; } .car-accent { fill:#4ec9ff; } .car-wheel { fill:#0f172a; }
+        .bike-wheel { fill:#0f172a; } .bike-body { fill:#a78bfa; }
+        .walker-head { fill:#ffffff; } .walker-body { fill:#f59e0b; }
+
+        .jjss { background: linear-gradient(90deg, rgba(96,165,250,.25), rgba(34,211,238,.25), rgba(167,139,250,.25)); }
+
+        @media (prefers-reduced-motion: reduce) {
+          .splashTitleAnim, .splashSubAnim, .topo > svg, .heat { animation: none !important; }
+        }
+
+        /* ===== UI base que ya tenías ===== */
         .badge {
           display:inline-flex; align-items:center; gap:6px;
           font-size:12px; padding:4px 8px; border-radius:9999px;
@@ -778,98 +903,206 @@ export default function App() {
         }
         .btn-primary { background:#2563eb; color:#fff; border: none; }
         .btn-plain { background:transparent; color:#9fb4c9; border:1px solid rgba(255,255,255,0.08); }
-        .card {
-          background:#041021; border-radius:12px; padding:12px;
-          border:1px solid rgba(255,255,255,0.06);
-        }
+        .btn-alt { background:#0ea5e9; color:#fff; border:none; }
+        .card { background:#041021; border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.06); }
 
-        /* Hamburguesa */
         .hamb-line { display:block; width:26px; height:3px; background:#ffffff; margin:5px 0; border-radius:2px; }
         button.hamb:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
         button.hamb:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(0,0,0,0.7); background: rgba(5,16,36,0.95); }
 
-        /* Pulso (borde/sombra) */
-        @keyframes pulseHigh {
-          0% { box-shadow: 0 0 0 rgba(239,68,68,0.0); }
-          50% { box-shadow: 0 0 38px rgba(239,68,68,0.6); }
-          100% { box-shadow: 0 0 0 rgba(239,68,68,0.0); }
-        }
-        @keyframes pulseMedium {
-          0% { box-shadow: 0 0 0 rgba(245,158,11,0.0); }
-          50% { box-shadow: 0 0 30px rgba(245,158,11,0.55); }
-          100% { box-shadow: 0 0 0 rgba(245,158,11,0.0); }
-        }
-        @keyframes pulseLow {
-          0% { box-shadow: 0 0 0 rgba(16,185,129,0.0); }
-          50% { box-shadow: 0 0 22px rgba(16,185,129,0.45); }
-          100% { box-shadow: 0 0 0 rgba(16,185,129,0.0); }
-        }
-        .pulse-high { animation: pulseHigh 1s infinite; border-color: rgba(239,68,68,0.6) !important; }
-        .pulse-medium { animation: pulseMedium 1.2s infinite; border-color: rgba(245,158,11,0.6) !important; }
-        .pulse-low { animation: pulseLow 1.4s infinite; border-color: rgba(16,185,129,0.6) !important; }
+        @keyframes pulseHigh { 0% { box-shadow: 0 0 0 rgba(239,68,68,0.0); } 50% { box-shadow: 0 0 44px rgba(239,68,68,0.85); } 100% { box-shadow: 0 0 0 rgba(239,68,68,0.0); } }
+        @keyframes pulseMedium { 0% { box-shadow: 0 0 0 rgba(245,158,11,0.0); } 50% { box-shadow: 0 0 36px rgba(245,158,11,0.75); } 100% { box-shadow: 0 0 0 rgba(245,158,11,0.0); } }
+        @keyframes pulseLow { 0% { box-shadow: 0 0 0 rgba(16,185,129,0.0); } 50% { box-shadow: 0 0 28px rgba(16,185,129,0.6); } 100% { box-shadow: 0 0 0 rgba(16,185,129,0.0); } }
 
-        /* Fondo del panel que también titila */
         .panel-friendly { position: relative; align-items: stretch; overflow: hidden; }
-        .panel-friendly::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          opacity: 0;
-          transition: opacity .2s ease;
-        }
-        @keyframes bgPulseHigh { 0%{opacity:0;} 50%{opacity:.45;} 100%{opacity:0;} }
-        @keyframes bgPulseMedium { 0%{opacity:0;} 50%{opacity:.35;} 100%{opacity:0;} }
-        @keyframes bgPulseLow { 0%{opacity:0;} 50%{opacity:.25;} 100%{opacity:0;} }
+        .panel-friendly::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .2s ease; }
+        @keyframes bgPulseHigh { 0%{opacity:0;} 50%{opacity:.75;} 100%{opacity:0;} }
+        @keyframes bgPulseMedium { 0%{opacity:0;} 50%{opacity:.6;} 100%{opacity:0;} }
+        @keyframes bgPulseLow { 0%{opacity:0;} 50%{opacity:.45;} 100%{opacity:0;} }
 
-        .panel-alert-high { background: linear-gradient(180deg, rgba(38,9,9,0.9), rgba(22,6,6,0.95)); }
-        .panel-alert-medium { background: linear-gradient(180deg, rgba(38,28,8,0.9), rgba(24,17,6,0.95)); }
-        .panel-alert-low { background: linear-gradient(180deg, rgba(7,28,22,0.9), rgba(5,20,16,0.95)); }
+        .panel-alert-high { background: linear-gradient(180deg, rgba(38,9,9,0.95), rgba(22,6,6,0.98)); }
+        .panel-alert-medium { background: linear-gradient(180deg, rgba(38,28,8,0.94), rgba(24,17,6,0.97)); }
+        .panel-alert-low { background: linear-gradient(180deg, rgba(7,28,22,0.92), rgba(5,20,16,0.96)); }
+        .panel-alert-high.panel-friendly::before { background: rgba(239,68,68,0.85); animation: bgPulseHigh .95s infinite; }
+        .panel-alert-medium.panel-friendly::before { background: rgba(245,158,11,0.7); animation: bgPulseMedium 1.1s infinite; }
+        .panel-alert-low.panel-friendly::before { background: rgba(16,185,129,0.55); animation: bgPulseLow 1.25s infinite; }
 
-        .panel-alert-high.panel-friendly::before { background: rgba(239,68,68,0.55); animation: bgPulseHigh 1s infinite; }
-        .panel-alert-medium.panel-friendly::before { background: rgba(245,158,11,0.45); animation: bgPulseMedium 1.2s infinite; }
-        .panel-alert-low.panel-friendly::before { background: rgba(16,185,129,0.35); animation: bgPulseLow 1.4s infinite; }
-
-        .row { display:flex; gap:8px; flex-wrap:wrap; }
         .chip { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9999px; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); font-size:12px; }
         .chip.level { font-weight:800; }
+        .chip.tab { cursor:pointer; user-select:none; }
+        .chip-pulse-high { animation: pulseHigh .95s infinite; border-color: rgba(239,68,68,0.85) !important; }
+        .chip-pulse-medium { animation: pulseMedium 1.1s infinite; border-color: rgba(245,158,11,0.75) !important; }
+        .chip-pulse-low { animation: pulseLow 1.25s infinite; border-color: rgba(16,185,129,0.6) !important; }
         .dot { width:10px; height:10px; border-radius:9999px; display:inline-block; }
         .dot.high{ background:#ef4444; } .dot.medium{ background:#f59e0b; } .dot.low{ background:#10b981; }
         .advice { margin-top:10px; font-size:15px; line-height:1.35; color:#e9f2ff; font-weight:700; }
+
         .panel-right {
           min-width:200px; text-align:right; padding-left:12px; border-left:1px solid rgba(255,255,255,.06);
-          display:flex; gap:14px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
+          display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
         }
         .metric .label { font-size:12px; color:#9fb4c9; }
         .metric .value { margin-top:4px; font-weight:800; }
-        @media (max-width: 560px) {
-          .panel-right { min-width:auto; border-left:none; text-align:left; justify-content:flex-start; }
-        }
       `}</style>
 
+      {/* Splash nuevo */}
+      {showSplash && (
+        <div style={styles.splash} role="dialog" aria-label="Cargando SafeMap" aria-live="polite">
+          {/* Heat blobs */}
+          <div
+            className="bg-layer heat"
+            aria-hidden="true"
+            style={{
+              background:
+                "radial-gradient(900px 700px at 15% 15%, rgba(96,165,250,.22), transparent 60%), radial-gradient(1000px 800px at 90% 80%, rgba(34,211,238,.22), transparent 60%), radial-gradient(800px 700px at 50% 40%, rgba(167,139,250,.20), transparent 60%)",
+            }}
+          />
+
+          {/* Topografía suave */}
+          <div className="bg-layer topo" aria-hidden="true">
+            <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+              {[...Array(9)].map((_, i) => (
+                <path
+                  key={i}
+                  d={`M-240 ${90 + i * 90} C 200 ${50 + i * 90}, 420 ${140 + i * 90}, 820 ${80 + i * 90} S 1460 ${160 + i * 90}, 1900 ${110 + i * 90}`}
+                  fill="none"
+                  stroke={i % 3 === 0 ? "#5bd5ff" : i % 3 === 1 ? "#9fc5ff" : "#a48bff"}
+                  strokeOpacity={0.09 + (i % 3 === 0 ? 0.05 : 0)}
+                  strokeWidth={2}
+                />
+              ))}
+            </svg>
+          </div>
+
+          {/* Red + rutas completas */}
+          <svg className="bg-layer net" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            {/* Grid sutil */}
+            <g opacity="0.22" stroke="#5bd5ff">
+              <path d="M0 140 H1440 M0 300 H1440 M0 520 H1440 M0 760 H1440" strokeOpacity=".22" />
+              <path d="M140 0 V900 M360 0 V900 M640 0 V900 M980 0 V900 M1220 0 V900" strokeOpacity=".14" />
+            </g>
+
+            {/* CARRO */}
+            <path id="routeCar" className="route-base route-car"
+              d="M-200 760 C 120 700, 360 660, 620 560 S 1040 420, 1220 410 S 1640 420, 1700 360" strokeWidth="4" />
+            <path className="route-progress route-car"
+              d="M-200 760 C 120 700, 360 660, 620 560 S 1040 420, 1220 410 S 1640 420, 1700 360" strokeWidth="6">
+              <animate attributeName="stroke-dasharray" values="0,2600; 2600,0" dur="6s" repeatCount="indefinite" />
+            </path>
+            <g className="car">
+              <g>
+                <rect className="car-body" x="-12" y="-7" rx="3" ry="3" width="24" height="14" />
+                <rect className="car-accent" x="-6" y="-4" rx="2" ry="2" width="12" height="8" />
+                <circle className="car-wheel" cx="-7" cy="8" r="3" />
+                <circle className="car-wheel" cx="7" cy="8" r="3" />
+              </g>
+              <animateMotion dur="6s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#routeCar" />
+              </animateMotion>
+            </g>
+
+            {/* CAMINANDO */}
+            <path id="routeWalk" className="route-base route-walk"
+              d="M-220 620 C 60 610, 240 560, 480 520 S 900 480, 1160 520 S 1600 580, 1700 640" strokeWidth="3.5" />
+            <path className="route-progress route-walk"
+              d="M-220 620 C 60 610, 240 560, 480 520 S 900 480, 1160 520 S 1600 580, 1700 640" strokeWidth="5">
+              <animate attributeName="stroke-dasharray" values="0,2600; 2600,0" dur="7s" repeatCount="indefinite" />
+            </path>
+            <g className="walker">
+              <circle className="walker-head" r="5" cy="-14" />
+              <rect className="walker-body" x="-3" y="-13" width="6" height="18" rx="2" />
+              <rect className="walker-body" x="-8" y="2" width="6" height="10" rx="2" />
+              <rect className="walker-body" x="2" y="2" width="6" height="10" rx="2" />
+              <animateMotion dur="7s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#routeWalk" />
+              </animateMotion>
+            </g>
+
+            {/* MOTO */}
+            <path id="routeMoto" className="route-base route-moto"
+              d="M-240 480 C 80 520, 300 480, 560 440 S 980 360, 1240 340 S 1600 320, 1720 300" strokeWidth="3.5" />
+            <path className="route-progress route-moto"
+              d="M-240 480 C 80 520, 300 480, 560 440 S 980 360, 1240 340 S 1600 320, 1720 300" strokeWidth="5">
+              <animate attributeName="stroke-dasharray" values="0,2600; 2600,0" dur="5s" repeatCount="indefinite" />
+            </path>
+            <g className="moto">
+              <circle className="bike-wheel" r="4.2" cx="-9" cy="8" />
+              <circle className="bike-wheel" r="4.2" cx="9" cy="8" />
+              <rect className="bike-body" x="-8" y="-2" width="16" height="6" rx="2" />
+              <rect className="bike-body" x="-2" y="-6" width="10" height="4" rx="1.5" />
+              <animateMotion dur="5s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#routeMoto" />
+              </animateMotion>
+            </g>
+          </svg>
+
+          {/* Centro */}
+          <div style={styles.splashCenter}>
+            <div style={styles.splashTitle} className="splashTitleAnim">SafeMap</div>
+            <div style={styles.splashSubtitle} className="splashSubAnim">
+              Rutas y seguridad urbana en tiempo real
+            </div>
+
+            <div style={styles.splashLoaderTrack} aria-hidden="true">
+              <div style={styles.splashLoaderBar} />
+            </div>
+
+            {/* JJSS monograma */}
+            <div style={{ ...styles.jjssWrap, marginTop: 18 }} className="jjss" aria-label="Hecho por JJSS">
+              <strong style={styles.jjssMonogram}>
+                <span style={{background:"linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",WebkitBackgroundClip:"text",backgroundClip:"text",color:"transparent"}}>J</span>
+                <span style={{background:"linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",WebkitBackgroundClip:"text",backgroundClip:"text",color:"transparent"}}>J</span>
+                <span style={{background:"linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",WebkitBackgroundClip:"text",backgroundClip:"text",color:"transparent"}}>S</span>
+                <span style={{background:"linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",WebkitBackgroundClip:"text",backgroundClip:"text",color:"transparent"}}>S</span>
+              </strong>
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 12, color: "#8fa6bd" }}>
+              Preparando el mapa…
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botón hamburguesa */}
-      <button
-        aria-label={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
-        aria-controls="sidepanel"
-        title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
-        className="hamb"
-        style={styles.hamburger}
-        onClick={() => setSidebarOpen((s) => !s)}
-      >
-        <span className="hamb-line" />
-        <span className="hamb-line" />
-        <span className="hamb-line" />
-      </button>
+      {!sidebarOpen && !showSplash && (
+        <button
+          aria-label="Mostrar panel"
+          aria-controls="sidepanel"
+          title="Mostrar panel"
+          className="hamb"
+          style={styles.hamburger}
+          onClick={() => setSidebarOpen(true)}
+        >
+          <span className="hamb-line" />
+          <span className="hamb-line" />
+          <span className="hamb-line" />
+        </button>
+      )}
 
       {/* Sidebar */}
       <aside
         id="sidepanel"
         style={{
           ...styles.sidebar,
-          width: sidebarWidth,
+          width: getSidebarWidth(),
           ...(sidebarOpen ? styles.sidebarOpen : null),
         }}
       >
+        {sidebarOpen && (
+          <button
+            aria-label="Ocultar panel"
+            title="Ocultar panel"
+            style={styles.closeFab}
+            onClick={() => setSidebarOpen(false)}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+
         <div>
           <div style={styles.title}>🧭 Mapa de Riesgo Pro</div>
           <div style={styles.small}>Ruta + filtro por localidad</div>
@@ -910,7 +1143,7 @@ export default function App() {
                 setRoute(null);
                 setInstructions([]);
                 setActiveInstructionIndex(0);
-                if (followPosition) { try { navigator.geolocation.clearWatch(watchRef.current); } catch {} setFollowPosition(false); }
+                setBottomMode("instructions");
               }}
             >
               Iniciar
@@ -943,8 +1176,9 @@ export default function App() {
               Voz (TTS)
             </label>
             <div style={{ marginLeft: "auto", color: "#86a6bf", fontSize: 12 }}>
-              {isStarted && route ? `${formatDistance(route.distance)} • ${formatTimeMin(route.time)}` :
-               previewRoute ? `Preview: ${formatDistance(previewRoute.distance)} • ${formatTimeMin(previewRoute.time)}` : "—"}
+              {isStarted && route ? `${formatDistanceBOG(route.distance)} • ${formatDurationBOG(route.time)}`
+                : previewRoute ? `Preview: ${formatDistanceBOG(previewRoute.distance)} • ${formatDurationBOG(previewRoute.time)}`
+                : "—"}
             </div>
           </div>
         </div>
@@ -957,7 +1191,15 @@ export default function App() {
             value={localidadText}
             onChange={(e) => setLocalidadText(e.target.value)}
             placeholder="Escribe la localidad…"
-            style={{ width: "100%", padding: 8, borderRadius: 10, background: "#061226", color: "#e6eef8", border: "1px solid rgba(255,255,255,0.06)" }}
+            style={{
+              width: "100%",
+              padding: "10px",
+              borderRadius: "10px",
+              background: "#061226",
+              color: "#e6eef8",
+              border: "1px solid rgba(255,255,255,0.06)",
+              boxSizing: "border-box",
+            }}
           />
           <div style={{ marginTop: 6, color: "#6b7280", fontSize: 12 }}>
             (Se aplica automáticamente)
@@ -971,39 +1213,19 @@ export default function App() {
 
       {/* Map area */}
       <div style={styles.mapWrap}>
-        {/* Floating controls */}
-        <div style={styles.floatingControls}>
-          <button
-            onClick={toggleFollow}
-            style={{ ...styles.fab, background: followPosition ? "#ef4444" : "#0ea5a7", color: "#021025" }}
-          >
-            {followPosition ? "⏸️ Detener" : "📍 Seguir"}
-          </button>
-          <button
-            onClick={() => {
-              if (startLoc && mapRef.current) {
-                try { mapRef.current.setView(startLoc, 15, { animate: true }); } catch {}
-              } else if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((p) => mapRef.current && mapRef.current.setView([p.coords.latitude, p.coords.longitude], 15));
-              }
-            }}
-            style={{ ...styles.fab, background: "#60a5fa", color: "#021025" }}
-          >
-            📌 Centrar
-          </button>
-        </div>
-
         <MapContainer
           center={[4.60971, -74.08175]}
           zoom={12}
           style={{ height: "100%", width: "100%" }}
           doubleClickZoom={false}
+          zoomControl={false}
           whenCreated={(m) => {
             mapRef.current = m;
             requestAnimationFrame(() => { try { m.invalidateSize(); } catch {} });
             setTimeout(() => { try { m.invalidateSize(); } catch {} }, 250);
           }}
         >
+          <ZoomControl position="topright" />
           <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
           {/* Heatmap */}
@@ -1016,21 +1238,22 @@ export default function App() {
           {startLoc && <Marker position={startLoc}><Popup>Inicio</Popup></Marker>}
           {endLoc && <Marker position={endLoc}><Popup>Destino</Popup></Marker>}
 
-          {/* PREVIEW (neón, sin voz) */}
+          {/* PREVIEW */}
           {startLoc && endLoc && !isStarted && (
             <GenericRoutingMachine
               start={startLoc}
               end={endLoc}
               mode={mode}
-              onRoute={onRoutePreview}
-              onInstructions={onInstructionsPreview}
+              onRoute={setPreviewRoute}
+              onInstructions={setPreviewInstructions}
               speakEnabled={false}
               isPreview={true}
               fitSelected={true}
+              viaPoints={viaPoints}
             />
           )}
 
-          {/* ACTIVA (color, voz, riesgo) */}
+          {/* ACTIVA */}
           {startLoc && endLoc && isStarted && (
             <GenericRoutingMachine
               start={startLoc}
@@ -1041,6 +1264,7 @@ export default function App() {
               speakEnabled={showInstructions && voiceSupported}
               isPreview={false}
               fitSelected={true}
+              viaPoints={viaPoints}
             />
           )}
 
@@ -1099,44 +1323,132 @@ export default function App() {
                 key={`near-${idx}`} center={[p.lat, p.lng]} radius={6}
                 pathOptions={{ color: p.dist < 100 ? "#ef4444" : p.dist <= 300 ? "#f59e0b" : "#10b981", weight: 2, opacity: 0.95 }}
               >
-                <Popup>{`${p.ev.type} a ${formatDistance(p.dist)}`}</Popup>
+                <Popup>{`${p.ev.type} a ${formatDistanceBOG(p.dist)}`}</Popup>
               </CircleMarker>
             ));
           })()}
 
+          {/* Marcador del paso bajo hover */}
+          {hoveredStepLatLng && (
+            <CircleMarker
+              center={[hoveredStepLatLng.lat, hoveredStepLatLng.lng]}
+              radius={9}
+              pathOptions={{ color: "#60a5fa", weight: 3, opacity: 0.95 }}
+            />
+          )}
         </MapContainer>
 
-        {/* Panel inferior (titila + info + consejo) */}
+        {/* Panel inferior */}
         {(previewRoute || route) && (
           (() => {
             const isActive = isStarted;
             const lvl = isActive ? riskLevel : previewRiskLevel;
-            const clsPulse = riskLevelToPulse(lvl);
-            const clsPanel = riskLevelClass(lvl);
-            const lbl = riskLabel(lvl);
-            const levelKey = (lbl === "ALTO" ? "high" : lbl === "MEDIO" ? "medium" : "low");
+            const clsPanel = bottomMode === "summary" ? riskLevelClass(lvl) : "";
+            const lbl = (lvl.includes("Alto") && "ALTO") || (lvl.includes("Medio") && "MEDIO") || (lvl.includes("Bajo") && "BAJO") || "—";
 
             const data = isActive ? route : previewRoute;
-            const dist = data ? formatDistance(data.distance) : "—";
-            const tim = data ? formatTimeMin(data.time) : "—";
-            const stepsCount = isActive ? (instructions?.length || 0) : (previewInstructions?.length || 0);
+            const dist = data ? formatDistanceBOG(data.distance) : "—";
+            const tim = data ? formatDurationBOG(data.time) : "—";
+            const steps = isActive ? (instructions || []) : (previewInstructions || []);
+
+            const levelKey = (lbl === "ALTO" ? "high" : lbl === "MEDIO" ? "medium" : "low");
+            const chipPulseClass =
+              bottomMode === "summary"
+                ? (levelKey === "high" ? "chip-pulse-high" : levelKey === "medium" ? "chip-pulse-medium" : levelKey === "low" ? "chip-pulse-low" : "")
+                : "";
+
+            const showAltBtn = /ALTO|MEDIO/.test(lbl) && startLoc && endLoc;
 
             return (
               <div
                 style={{ ...styles.bottomPanel, left: bottomPanelLeft }}
-                className={`${clsPulse} ${clsPanel} panel-friendly`}
-                role="status"
+                className={`${clsPanel} panel-friendly`}
+                role="region"
                 aria-live="polite"
+                aria-label={bottomMode === "instructions" ? "Indicaciones de la ruta" : "Resumen de la ruta"}
               >
-                <div style={{ ...styles.bottomLeft }}>
-                  <div className="row">
+                <div style={styles.bottomLeft}>
+                  <div className="row" style={{ alignItems: "center" }}>
                     <span className="chip">{isActive ? "🧭 Navegación activa" : "👀 Vista previa"}</span>
                     <span className="chip">{modeLabel(mode)} {mode === "walk" ? "🚶" : "🚗"}</span>
-                    <span className="chip level"><span className={`dot ${levelKey}`} /> Nivel {lbl}</span>
+                    <span className={`chip level ${chipPulseClass}`}>
+                      <span className={`dot ${levelKey}`} /> Nivel {lbl}
+                    </span>
+
+                    <span
+                      className="chip tab"
+                      style={{ ...styles.chipTab, marginLeft: "auto", borderColor: bottomMode === "instructions" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)", background: bottomMode === "instructions" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)" }}
+                      onClick={() => setBottomMode("instructions")}
+                    >
+                      📜 Indicaciones
+                    </span>
+                    <span
+                      className="chip tab"
+                      style={{ ...styles.chipTab, borderColor: bottomMode === "summary" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)", background: bottomMode === "summary" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)" }}
+                      onClick={() => setBottomMode("summary")}
+                    >
+                      🧩 Resumen
+                    </span>
                   </div>
-                  <div className="advice">
-                    {riskAdvice(lvl, mode)}
-                  </div>
+
+                  {bottomMode === "instructions" ? (
+                    <div style={styles.instrList}>
+                      {steps.length === 0 ? (
+                        <div style={{ color: "#9fb4c9", fontSize: 13 }}>Sin indicaciones disponibles.</div>
+                      ) : (
+                        <ol style={{ margin: 0, paddingLeft: 18 }}>
+                          {steps.map((s, i) => {
+                            const active = i === activeInstructionIndex && isActive;
+                            const hasPoint = !!s.raw?.latLng;
+                            return (
+                              <li key={i} style={{ marginBottom: 8 }}>
+                                <div
+                                  style={{ ...styles.instrItem, ...(active ? styles.instrItemActive : {}) }}
+                                  onMouseEnter={() => {
+                                    if (hasPoint) {
+                                      setHoveredStepLatLng(s.raw.latLng);
+                                      try {
+                                        mapRef.current &&
+                                          mapRef.current.setView(
+                                            [s.raw.latLng.lat, s.raw.latLng.lng],
+                                            Math.max(15, mapRef.current.getZoom() || 15),
+                                            { animate: true }
+                                          );
+                                      } catch {}
+                                    }
+                                  }}
+                                  onMouseLeave={() => setHoveredStepLatLng(null)}
+                                  title={hasPoint ? "Ver este paso en el mapa" : "Paso sin punto georreferenciado"}
+                                >
+                                  <div style={{ fontWeight: 700, marginBottom: 2 }}>{s.human}</div>
+                                  {s.raw?.distance != null && (
+                                    <div style={{ fontSize: 12, color: "#9fb4c9" }}>
+                                      {formatDistanceBOG(s.raw.distance)} • {Math.max(1, Math.round((s.raw.time || 0) / 60))} min aprox.
+                                    </div>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="advice">
+                      {lvl.includes("Alto")
+                        ? (mode === "walk"
+                          ? "Evita calles poco iluminadas o solas. Mantente en avenidas principales, comparte tu ubicación y considera una ruta alternativa."
+                          : "Prefiere vías principales e iluminadas. Evita detenerte; puertas y ventanas aseguradas. Considera una ruta alternativa.")
+                        : lvl.includes("Medio")
+                        ? (mode === "walk"
+                          ? "Mantén atención al entorno y tus pertenencias. Evita atajos y zonas estrechas."
+                          : "Conduce con precaución y evita calles estrechas. No te detengas innecesariamente.")
+                        : (mode === "walk"
+                          ? "Ruta recomendable. Aun así, mantén atención al entorno."
+                          : "Ruta recomendable. Conduce atento y respeta señales.")
+                      }
+                    </div>
+                  )}
                 </div>
 
                 <div className="panel-right">
@@ -1148,10 +1460,23 @@ export default function App() {
                     <div className="label">Tiempo</div>
                     <div className="value">{tim}</div>
                   </div>
-                  <div className="metric">
-                    <div className="label">Pasos</div>
-                    <div className="value">{stepsCount}</div>
-                  </div>
+
+                  {showAltBtn && (
+                    <button
+                      className="btn-alt"
+                      style={{ padding: "8px 10px", borderRadius: 10 }}
+                      onClick={() => {
+                        const via = suggestAlternateVia();
+                        if (!via) return alert("No encontré una vía alternativa adecuada.");
+                        setViaPoints([via]);
+                        setIsStarted(true);
+                        setBottomMode("instructions");
+                      }}
+                      title="Crear una ruta alterna que evite la zona de mayor riesgo"
+                    >
+                      Ruta alterna
+                    </button>
+                  )}
                 </div>
               </div>
             );
