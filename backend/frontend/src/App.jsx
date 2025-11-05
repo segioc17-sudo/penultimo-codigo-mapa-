@@ -47,6 +47,19 @@ const getSidebarWidth = () => {
   return Math.min(360, Math.round(window.innerWidth * 0.92));
 };
 
+// ===== helpers de storage (no rompe si está bloqueado) =====
+const getLS = (k, fallback = null) => {
+  try {
+    const v = localStorage.getItem(k);
+    return v ? JSON.parse(v) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+const setLS = (k, v) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+};
+
 // ================== Estilos ==================
 const styles = {
   app: {
@@ -57,6 +70,7 @@ const styles = {
     overflow: "hidden",
     background: "#0b1224",
     position: "relative",
+    touchAction: "pan-x pan-y",
   },
 
   /* ===== SPLASH (solo visual) ===== */
@@ -73,7 +87,7 @@ const styles = {
   },
   splashCenter: { textAlign: "center", padding: "28px 24px", position: "relative" },
   splashTitle: {
-    fontSize: "clamp(72px, 14vw, 160px)",
+    fontSize: "clamp(56px, 12vw, 160px)",
     fontWeight: 1000,
     letterSpacing: 0.6,
     marginBottom: 12,
@@ -85,9 +99,9 @@ const styles = {
     color: "transparent",
     textShadow: "0 4px 30px rgba(96,165,250,0.15)",
   },
-  splashSubtitle: { fontSize: "clamp(14px, 2.2vw, 18px)", color: "#a7bed2", marginBottom: 18 },
+  splashSubtitle: { fontSize: "clamp(13px, 2.8vw, 18px)", color: "#a7bed2", marginBottom: 18 },
   splashLoaderTrack: {
-    width: "min(420px, 70vw)",
+    width: "min(420px, 80vw)",
     height: 3,
     borderRadius: 9999,
     background: "rgba(255,255,255,0.10)",
@@ -134,7 +148,7 @@ const styles = {
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     color: "#e6eef8",
-    padding: "60px 16px 16px",
+    padding: "calc(env(safe-area-inset-top, 0px) + 56px) 16px 16px",
     display: "flex",
     flexDirection: "column",
     gap: 12,
@@ -144,14 +158,16 @@ const styles = {
     transform: "translateX(-110%)",
     transition: "transform .3s ease, opacity .3s ease",
     opacity: 0,
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
   },
   sidebarOpen: { transform: "translateX(0)", opacity: 1 },
   closeFab: {
     position: "absolute",
     right: -18,
-    top: 14,
-    width: 36,
-    height: 36,
+    top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+    width: 40,
+    height: 40,
     borderRadius: "9999px",
     border: "2px solid rgba(255,255,255,0.9)",
     background: "rgba(2,10,28,0.96)",
@@ -167,13 +183,14 @@ const styles = {
   title: { color: "#60a5fa", fontSize: 18, fontWeight: 800, letterSpacing: 0.2 },
   small: { color: "#9fb4c9", fontSize: 12.5 },
   mapWrap: { flex: 1, position: "relative", minWidth: 0 },
+
   hamburger: {
     position: "absolute",
-    left: 16,
-    top: 16,
+    left: 12,
+    top: "calc(env(safe-area-inset-top, 0px) + 12px)",
     zIndex: 3500,
-    padding: "12px 14px",
-    borderRadius: 14,
+    padding: "14px 16px",
+    borderRadius: 16,
     border: "2px solid rgba(255,255,255,0.9)",
     background: "rgba(2,10,28,0.9)",
     color: "#e6eef8",
@@ -182,7 +199,9 @@ const styles = {
     outline: "none",
     transition: "transform .08s ease, box-shadow .2s ease, background .2s ease",
     backdropFilter: "blur(6px)",
+    touchAction: "manipulation",
   },
+
   bottomPanel: {
     position: "absolute",
     right: 12,
@@ -208,11 +227,12 @@ const styles = {
     overflowY: "auto",
     paddingRight: 6,
     scrollBehavior: "smooth",
+    WebkitOverflowScrolling: "touch",
   },
   instrItem: {
     fontSize: 14,
     lineHeight: 1.25,
-    padding: "8px 10px",
+    padding: "10px 12px",
     borderRadius: 10,
     background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.1)",
@@ -224,6 +244,23 @@ const styles = {
     boxShadow: "0 0 0 2px rgba(96,165,250,0.25) inset",
   },
   chipTab: { cursor: "pointer", userSelect: "none" },
+
+  // Geolocate floating btn
+  geoBtn: {
+    position: "absolute",
+    top: 64,
+    right: 16 + 40,
+    zIndex: 3500,
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: "2px solid rgba(255,255,255,0.9)",
+    background: "rgba(2,10,28,0.9)",
+    color: "#e6eef8",
+    cursor: "pointer",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+    backdropFilter: "blur(6px)",
+    touchAction: "manipulation",
+  },
 };
 
 // ================== Utils ==================
@@ -290,14 +327,84 @@ function useVoice(lang = "es-CO", rate = 1, pitch = 1) {
 
   const speak = useCallback((text) => {
     if (!synth || !text) return;
+    try { synth.cancel(); } catch {}
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang; u.rate = rate; u.pitch = pitch;
-    try { synth.cancel(); } catch {}
-    synth.speak(u);
+    try { synth.speak(u); } catch {}
   }, [synth, lang, rate, pitch]);
 
   const stop = useCallback(() => { try { synth && synth.cancel(); } catch {} }, [synth]);
   return { supported: !!synth, voicesReady, speak, stop };
+}
+
+// ================== Hook de ALERTA SONORA ==================
+function useAlertAudio({ cooldownMs = 15000 } = {}) {
+  const ctxRef = useRef(null);
+  const unlockedRef = useRef(false);
+  const lastPlayRef = useRef(0);
+
+  useEffect(() => {
+    const unlock = () => {
+      if (unlockedRef.current) return;
+      try {
+        const ctx = ctxRef.current || new (window.AudioContext || window.webkitAudioContext)();
+        ctxRef.current = ctx;
+        if (ctx.state === "suspended") ctx.resume();
+        unlockedRef.current = true;
+      } catch {}
+    };
+    const evts = ["pointerdown", "keydown"];
+    evts.forEach((e) => window.addEventListener(e, unlock, { once: true, passive: true }));
+    return () => evts.forEach((e) => window.removeEventListener(e, unlock));
+  }, []);
+
+  const simpleBeep = useCallback(async (freq = 800, durationMs = 180, gainValue = 0.2) => {
+    try {
+      const ctx = ctxRef.current || new (window.AudioContext || window.webkitAudioContext)();
+      ctxRef.current = ctx;
+      if (ctx.state === "suspended") await ctx.resume();
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.value = 0;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+
+      osc.start(now);
+      osc.stop(now + durationMs / 1000 + 0.02);
+    } catch {}
+  }, []);
+
+  const playPattern = useCallback(async (level) => {
+    const nowT = Date.now();
+    if (nowT - lastPlayRef.current < cooldownMs) return;
+    lastPlayRef.current = nowT;
+
+    if (level === "ALTO") {
+      await simpleBeep(880, 200, 0.35);
+      await new Promise(r => setTimeout(r, 140));
+      await simpleBeep(990, 200, 0.35);
+      await new Promise(r => setTimeout(r, 140));
+      await simpleBeep(880, 260, 0.4);
+    } else if (level === "MEDIO") {
+      await simpleBeep(660, 180, 0.22);
+      await new Promise(r => setTimeout(r, 180));
+      await simpleBeep(660, 200, 0.22);
+    } else {
+      // BAJO -> silencio
+    }
+  }, [cooldownMs, simpleBeep]);
+
+  return { playPattern };
 }
 
 // ================== Heatmap Layer ==================
@@ -434,7 +541,6 @@ function GenericRoutingMachine({
         const coords = (r.coordinates || []).map(c => ({ lat: c.lat, lng: c.lng }));
         const distance = r.summary?.totalDistance || 0;
 
-        // tiempo “realista” Bogotá
         const time = estimateBogotaTimeSec(distance, mode);
 
         const raw = r.instructions || [];
@@ -458,7 +564,7 @@ function GenericRoutingMachine({
       .addTo(map);
 
     controlRef.current = rc;
-  return () => {
+    return () => {
       if (controlRef.current) { try { map.removeControl(controlRef.current); } catch {} controlRef.current = null; }
     };
   }, [start, end, mode, map, onRoute, onInstructions, speakEnabled, isPreview, fitSelected, viaPoints]);
@@ -469,8 +575,18 @@ function GenericRoutingMachine({
 // ================== Componente principal ==================
 export default function App() {
   // Splash (duración)
-  const SPLASH_MS = 3200;
+  const SPLASH_MS = 4200;
   const [showSplash, setShowSplash] = useState(true);
+
+  // ======= Responsive flag =======
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // datos
   const [events, setEvents] = useState([]);
@@ -478,13 +594,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
-  // filtros
+  // filtros (debounce)
   const [localidadText, setLocalidadText] = useState("");
+  const [localidadDebounced, setLocalidadDebounced] = useState("");
 
   // routing / ui
-  const [startLoc, setStartLoc] = useState(null);
-  const [endLoc, setEndLoc] = useState(null);
-  const [mode, setMode] = useState("car");
+  const [startLoc, setStartLoc] = useState(getLS("startLoc", null));
+  const [endLoc, setEndLoc] = useState(getLS("endLoc", null));
+  const [mode, setMode] = useState(getLS("mode", "car"));
 
   // Vista previa vs ruta activa
   const [previewRoute, setPreviewRoute] = useState(null);
@@ -504,8 +621,11 @@ export default function App() {
   const [riskComments, setRiskComments] = useState([]);
   const [riskLevel, setRiskLevel] = useState("—");
 
-  const [proximityMeters, setProximityMeters] = useState(300);
+  const [proximityMeters, setProximityMeters] = useState(getLS("proximityMeters", 300));
   const [showInstructions, setShowInstructions] = useState(true);
+
+  // 🔊 Preferencia de sonido de alerta
+  const [alertSoundEnabled, setAlertSoundEnabled] = useState(getLS("alertSoundEnabled", true));
 
   // Panel inferior ("summary" | "instructions")
   const [bottomMode, setBottomMode] = useState("summary");
@@ -514,13 +634,18 @@ export default function App() {
   const [hoveredStepLatLng, setHoveredStepLatLng] = useState(null);
 
   const mapRef = useRef(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(getLS("sidebarOpen", false));
 
-  // voz  **FIX AQUÍ**
+  // voz
   const { supported: voiceSupported, voicesReady, speak, stop } = useVoice("es-CO", 1, 1);
 
   // via points
   const [viaPoints, setViaPoints] = useState([]);
+
+  // ======= Hook de audio de alerta =======
+  const { playPattern } = useAlertAudio({ cooldownMs: 15000 });
+  const lastPreviewLevelRef = useRef("—");
+  const lastActiveLevelRef = useRef("—");
 
   // ======= Fix 100vh móviles =======
   useEffect(() => {
@@ -617,13 +742,19 @@ export default function App() {
     [filtered]
   );
 
+  // ======= Debounce del filtro de localidad =======
+  useEffect(() => {
+    const t = setTimeout(() => setLocalidadDebounced(localidadText), 220);
+    return () => clearTimeout(t);
+  }, [localidadText]);
+
   // ======= Filtros =======
   useEffect(() => {
     let tmp = [...events];
-    const s = (localidadText || "").toLowerCase();
+    const s = (localidadDebounced || "").toLowerCase();
     if (s) tmp = tmp.filter((e) => (e.barrio || "").toLowerCase().includes(s));
     setFiltered(tmp);
-  }, [events, localidadText]);
+  }, [events, localidadDebounced]);
 
   // ===== helpers de riesgo =====
   const computeNearestEventToRoute = useCallback((coords) => {
@@ -727,6 +858,22 @@ export default function App() {
     }
   }, [previewRoute, filtered, proximityMeters]);
 
+  // ======= 🔊 Disparar sonido en PREVIEW cuando cambie nivel =======
+  useEffect(() => {
+    const prev = lastPreviewLevelRef.current;
+    const cur = (previewRiskLevel || "—").toUpperCase().includes("ALTO")
+      ? "ALTO"
+      : (previewRiskLevel || "—").toUpperCase().includes("MEDIO")
+      ? "MEDIO"
+      : "BAJO";
+    if (alertSoundEnabled && cur !== prev) {
+      if (cur === "ALTO" || cur === "MEDIO") {
+        playPattern(cur);
+      }
+    }
+    lastPreviewLevelRef.current = cur;
+  }, [previewRiskLevel, alertSoundEnabled, playPattern]);
+
   // ======= Riesgo ACTIVO =======
   useEffect(() => {
     if (!route?.coords?.length) { setRiskComments([]); setRiskLevel("—"); return; }
@@ -755,6 +902,22 @@ export default function App() {
       setRiskLevel(level);
     }
   }, [route, filtered, proximityMeters]);
+
+  // ======= 🔊 Disparar sonido en ACTIVO cuando cambie nivel =======
+  useEffect(() => {
+    const prev = lastActiveLevelRef.current;
+    const cur = (riskLevel || "—").toUpperCase().includes("ALTO")
+      ? "ALTO"
+      : (riskLevel || "—").toUpperCase().includes("MEDIO")
+      ? "MEDIO"
+      : "BAJO";
+    if (alertSoundEnabled && cur !== prev) {
+      if (cur === "ALTO" || cur === "MEDIO") {
+        playPattern(cur);
+      }
+    }
+    lastActiveLevelRef.current = cur;
+  }, [riskLevel, alertSoundEnabled, playPattern]);
 
   // ======= Progresión instrucción por posición =======
   const updateActiveInstructionByPosition = useCallback((pos) => {
@@ -788,7 +951,7 @@ export default function App() {
   const onInstructionsPreview = useCallback((msgs) => { setPreviewInstructions(msgs || []); }, []);
 
   // ======= Limpiar =======
-  const clearRoute = () => {
+  const clearRoute = useCallback(() => {
     try { stop(); } catch {}
     setPreviewRoute(null);
     setPreviewInstructions([]);
@@ -805,7 +968,8 @@ export default function App() {
     setBottomMode("summary");
     setHoveredStepLatLng(null);
     setViaPoints([]);
-  };
+    setLS("startLoc", startLoc);
+  }, [stop, startLoc]);
 
   // ======= Reset a preview cuando cambian start/end/mode =======
   useEffect(() => {
@@ -820,6 +984,14 @@ export default function App() {
     setViaPoints([]);
   }, [startLoc?.[0], startLoc?.[1], endLoc?.[0], endLoc?.[1], mode]);
 
+  // ======= Persistencia de preferencias =======
+  useEffect(() => { setLS("mode", mode); }, [mode]);
+  useEffect(() => { setLS("proximityMeters", proximityMeters); }, [proximityMeters]);
+  useEffect(() => { setLS("sidebarOpen", sidebarOpen); }, [sidebarOpen]);
+  useEffect(() => { setLS("startLoc", startLoc); }, [startLoc?.[0], startLoc?.[1]]);
+  useEffect(() => { setLS("endLoc", endLoc); }, [endLoc?.[0], endLoc?.[1]]);
+  useEffect(() => { setLS("alertSoundEnabled", alertSoundEnabled); }, [alertSoundEnabled]);
+
   // ======= Center on start changes =======
   useEffect(() => {
     if (startLoc && mapRef.current) {
@@ -827,20 +999,40 @@ export default function App() {
     }
   }, [startLoc]);
 
-  // ======= Helpers UI =======
-  const riskLevelClass = (lvl) => {
-    if ((lvl || "").includes("Alto")) return "panel-alert-high";
-    if ((lvl || "").includes("Medio")) return "panel-alert-medium";
-    if ((lvl || "").includes("Bajo")) return "panel-alert-low";
-    return "";
-  };
-  const riskLabel = (lvl) => {
-    if ((lvl || "").includes("Alto")) return "ALTO";
-    if ((lvl || "").includes("Medio")) return "MEDIO";
-    if ((lvl || "").includes("Bajo")) return "BAJO";
-    return "—";
-  };
-  const modeLabel = (m) => (m === "walk" ? "Caminando" : "Vehículo");
+  // ======= Geolocalización =======
+  const setMyLocationAsStart = useCallback(() => {
+    if (!("geolocation" in navigator)) return alert("Tu navegador no soporta geolocalización.");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = [pos.coords.latitude, pos.coords.longitude];
+        setStartLoc(coords);
+        try { mapRef.current && mapRef.current.setView(coords, 15, { animate: true }); } catch {}
+      },
+      () => alert("No se pudo obtener tu ubicación."),
+      { enableHighAccuracy: true, timeout: 9000, maximumAge: 30000 }
+    );
+  }, []);
+
+  // ======= Atajos de teclado =======
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
+      if (e.key.toLowerCase() === "i") {
+        if (!previewRoute) return;
+        setIsStarted(true);
+        setRoute(null);
+        setInstructions([]);
+        setActiveInstructionIndex(0);
+        setBottomMode("instructions");
+      } else if (e.key.toLowerCase() === "c") {
+        clearRoute();
+      } else if (e.key.toLowerCase() === "g") {
+        setMyLocationAsStart();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewRoute, clearRoute, setMyLocationAsStart]);
 
   // ======= ancho real sidebar (para mover el bottomPanel) =======
   const [sidebarWidth, setSidebarWidth] = useState(getSidebarWidth());
@@ -894,7 +1086,7 @@ export default function App() {
           .splashTitleAnim, .splashSubAnim, .topo > svg, .heat { animation: none !important; }
         }
 
-        /* ===== UI base que ya tenías ===== */
+        /* ===== UI base ===== */
         .badge {
           display:inline-flex; align-items:center; gap:6px;
           font-size:12px; padding:4px 8px; border-radius:9999px;
@@ -906,7 +1098,7 @@ export default function App() {
         .btn-alt { background:#0ea5e9; color:#fff; border:none; }
         .card { background:#041021; border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.06); }
 
-        .hamb-line { display:block; width:26px; height:3px; background:#ffffff; margin:5px 0; border-radius:2px; }
+        .hamb-line { display:block; width:28px; height:3px; background:#ffffff; margin:5px 0; border-radius:2px; }
         button.hamb:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
         button.hamb:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(0,0,0,0.7); background: rgba(5,16,36,0.95); }
 
@@ -936,19 +1128,32 @@ export default function App() {
         .dot { width:10px; height:10px; border-radius:9999px; display:inline-block; }
         .dot.high{ background:#ef4444; } .dot.medium{ background:#f59e0b; } .dot.low{ background:#10b981; }
         .advice { margin-top:10px; font-size:15px; line-height:1.35; color:#e9f2ff; font-weight:700; }
+        .panel-right { min-width:200px; text-align:right; padding-left:12px; border-left:1px solid rgba(255,255,255,.06);
+          display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
 
-        .panel-right {
-          min-width:200px; text-align:right; padding-left:12px; border-left:1px solid rgba(255,255,255,.06);
-          display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap;
-        }
         .metric .label { font-size:12px; color:#9fb4c9; }
         .metric .value { margin-top:4px; font-weight:800; }
+
+        /* ======= RESPONSIVE ======= */
+        @media (max-width: 768px) {
+          .card { border-radius: 10px; padding: 10px; }
+          .chip { padding: 6px 8px; font-size: 11px; }
+          .metric .label { font-size: 11px; }
+          .metric .value { font-size: 14px; }
+
+          /* Mueve el ZoomControl un poco más abajo */
+          .leaflet-top.leaflet-right { top: calc(env(safe-area-inset-top, 0px) + 62px); }
+
+          /* Suaviza sombras para performance en móvil */
+          .jjss, .panel-friendly, .hamb, .leaflet-control-zoom {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
+          }
+        }
       `}</style>
 
-      {/* Splash nuevo */}
+      {/* Splash */}
       {showSplash && (
         <div style={styles.splash} role="dialog" aria-label="Cargando SafeMap" aria-live="polite">
-          {/* Heat blobs */}
           <div
             className="bg-layer heat"
             aria-hidden="true"
@@ -957,8 +1162,6 @@ export default function App() {
                 "radial-gradient(900px 700px at 15% 15%, rgba(96,165,250,.22), transparent 60%), radial-gradient(1000px 800px at 90% 80%, rgba(34,211,238,.22), transparent 60%), radial-gradient(800px 700px at 50% 40%, rgba(167,139,250,.20), transparent 60%)",
             }}
           />
-
-          {/* Topografía suave */}
           <div className="bg-layer topo" aria-hidden="true">
             <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
               {[...Array(9)].map((_, i) => (
@@ -974,15 +1177,11 @@ export default function App() {
             </svg>
           </div>
 
-          {/* Red + rutas completas */}
           <svg className="bg-layer net" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-            {/* Grid sutil */}
             <g opacity="0.22" stroke="#5bd5ff">
               <path d="M0 140 H1440 M0 300 H1440 M0 520 H1440 M0 760 H1440" strokeOpacity=".22" />
               <path d="M140 0 V900 M360 0 V900 M640 0 V900 M980 0 V900 M1220 0 V900" strokeOpacity=".14" />
             </g>
-
-            {/* CARRO */}
             <path id="routeCar" className="route-base route-car"
               d="M-200 760 C 120 700, 360 660, 620 560 S 1040 420, 1220 410 S 1640 420, 1700 360" strokeWidth="4" />
             <path className="route-progress route-car"
@@ -1001,7 +1200,6 @@ export default function App() {
               </animateMotion>
             </g>
 
-            {/* CAMINANDO */}
             <path id="routeWalk" className="route-base route-walk"
               d="M-220 620 C 60 610, 240 560, 480 520 S 900 480, 1160 520 S 1600 580, 1700 640" strokeWidth="3.5" />
             <path className="route-progress route-walk"
@@ -1018,7 +1216,6 @@ export default function App() {
               </animateMotion>
             </g>
 
-            {/* MOTO */}
             <path id="routeMoto" className="route-base route-moto"
               d="M-240 480 C 80 520, 300 480, 560 440 S 980 360, 1240 340 S 1600 320, 1720 300" strokeWidth="3.5" />
             <path className="route-progress route-moto"
@@ -1036,7 +1233,6 @@ export default function App() {
             </g>
           </svg>
 
-          {/* Centro */}
           <div style={styles.splashCenter}>
             <div style={styles.splashTitle} className="splashTitleAnim">SafeMap</div>
             <div style={styles.splashSubtitle} className="splashSubAnim">
@@ -1047,7 +1243,6 @@ export default function App() {
               <div style={styles.splashLoaderBar} />
             </div>
 
-            {/* JJSS monograma */}
             <div style={{ ...styles.jjssWrap, marginTop: 18 }} className="jjss" aria-label="Hecho por JJSS">
               <strong style={styles.jjssMonogram}>
                 <span style={{background:"linear-gradient(90deg,#9fc5ff,#5bd5ff,#a48bff)",WebkitBackgroundClip:"text",backgroundClip:"text",color:"transparent"}}>J</span>
@@ -1071,12 +1266,36 @@ export default function App() {
           aria-controls="sidepanel"
           title="Mostrar panel"
           className="hamb"
-          style={styles.hamburger}
+          style={{
+            ...styles.hamburger,
+            // en móviles, separa más de los bordes
+            left: isMobile ? 10 : styles.hamburger.left,
+            padding: isMobile ? "12px 14px" : styles.hamburger.padding,
+          }}
           onClick={() => setSidebarOpen(true)}
         >
           <span className="hamb-line" />
           <span className="hamb-line" />
           <span className="hamb-line" />
+        </button>
+      )}
+
+      {/* Botón geolocalización */}
+      {!showSplash && (
+        <button
+          type="button"
+          aria-label="Usar mi ubicación como inicio (g)"
+          title="Usar mi ubicación como inicio (g)"
+          style={{
+            ...styles.geoBtn,
+            // en móvil lo bajo para no chocar con zoom y panel
+            top: isMobile ? "auto" : styles.geoBtn.top,
+            bottom: isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 96px)" : "auto",
+            right: isMobile ? 12 : styles.geoBtn.right,
+          }}
+          onClick={setMyLocationAsStart}
+        >
+          📍
         </button>
       )}
 
@@ -1086,6 +1305,7 @@ export default function App() {
         style={{
           ...styles.sidebar,
           width: getSidebarWidth(),
+          maxWidth: isMobile ? "100vw" : "92vw",
           ...(sidebarOpen ? styles.sidebarOpen : null),
         }}
       >
@@ -1093,26 +1313,32 @@ export default function App() {
           <button
             aria-label="Ocultar panel"
             title="Ocultar panel"
-            style={styles.closeFab}
+            style={{
+              ...styles.closeFab,
+              width: isMobile ? 42 : styles.closeFab.width,
+              height: isMobile ? 42 : styles.closeFab.height,
+              right: isMobile ? 10 : styles.closeFab.right,
+              top: isMobile ? "calc(env(safe-area-inset-top, 0px) + 8px)" : styles.closeFab.top,
+            }}
             onClick={() => setSidebarOpen(false)}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
             </svg>
           </button>
         )}
 
         <div>
-          <div style={styles.title}>🧭 Mapa de Riesgo Pro</div>
-          <div style={styles.small}>Ruta + filtro por localidad</div>
+          <div style={{...styles.title, fontSize: isMobile ? 16 : 18}}>🧭 Mapa de Riesgo Pro</div>
+          <div style={{...styles.small, fontSize: isMobile ? 12 : 12.5}}>Ruta + filtro por localidad</div>
           {loading && <div style={{ color: "#9fb4c9", fontSize: 12, marginTop: 6 }}>Cargando datos…</div>}
           {loadError && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{loadError}</div>}
         </div>
 
         {/* Controles de Ruta */}
         <div className="card" style={{ marginTop: 8 }}>
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Ruta</div>
+          <div style={{ fontWeight: 800, marginBottom: 6, fontSize: isMobile ? 14 : 16 }}>Ruta</div>
 
           <div style={{ marginBottom: 8 }}>
             <label style={{ color: "#9fb4c9", fontSize: 13 }}>Inicio</label>
@@ -1124,11 +1350,11 @@ export default function App() {
             <SearchBox onSelectLocation={(coords) => setEndLoc(coords)} placeholder="Buscar destino..." />
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: isMobile ? "wrap" : "nowrap" }}>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value)}
-              style={{ flex: 1, padding: 8, borderRadius: 10, background: "#061226", color: "#e6eef8", border: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ flex: 1, minWidth: 140, padding: 10, borderRadius: 10, background: "#061226", color: "#e6eef8", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <option value="car">🚗 Vehículo</option>
               <option value="walk">🚶‍♂️ Caminando</option>
@@ -1136,7 +1362,7 @@ export default function App() {
 
             <button
               className="btn-primary"
-              style={{ padding: "8px 10px", borderRadius: 10 }}
+              style={{ padding: "10px 12px", borderRadius: 10, flex: isMobile ? "1 1 48%" : "0 0 auto" }}
               onClick={() => {
                 if (!previewRoute) return alert("Traza primero una ruta (elige inicio y destino).");
                 setIsStarted(true);
@@ -1145,11 +1371,19 @@ export default function App() {
                 setActiveInstructionIndex(0);
                 setBottomMode("instructions");
               }}
+              title="Iniciar navegación (i)"
+              aria-label="Iniciar navegación"
             >
               Iniciar
             </button>
 
-            <button className="btn-plain" style={{ padding: "8px 10px", borderRadius: 10 }} onClick={clearRoute}>
+            <button
+              className="btn-plain"
+              style={{ padding: "10px 12px", borderRadius: 10, flex: isMobile ? "1 1 48%" : "0 0 auto" }}
+              onClick={clearRoute}
+              title="Limpiar (c)"
+              aria-label="Limpiar"
+            >
               Limpiar
             </button>
           </div>
@@ -1162,11 +1396,11 @@ export default function App() {
               type="range" min={50} max={2500} step={10}
               value={proximityMeters}
               onChange={(e) => setProximityMeters(Number(e.target.value))}
-              style={{ width: "100%", marginTop: 6 }}
+              style={{ width: "100%", marginTop: 6, touchAction: "none" }}
             />
           </div>
 
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#9fb4c9" }}>
               <input
                 type="checkbox"
@@ -1175,6 +1409,16 @@ export default function App() {
               />
               Voz (TTS)
             </label>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, color: "#9fb4c9" }}>
+              <input
+                type="checkbox"
+                checked={alertSoundEnabled}
+                onChange={(e) => setAlertSoundEnabled(e.target.checked)}
+              />
+              Sonido alerta
+            </label>
+
             <div style={{ marginLeft: "auto", color: "#86a6bf", fontSize: 12 }}>
               {isStarted && route ? `${formatDistanceBOG(route.distance)} • ${formatDurationBOG(route.time)}`
                 : previewRoute ? `Preview: ${formatDistanceBOG(previewRoute.distance)} • ${formatDurationBOG(previewRoute.time)}`
@@ -1185,7 +1429,7 @@ export default function App() {
 
         {/* Filtro ÚNICO: Localidad */}
         <div className="card" style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Filtro por Localidad</div>
+          <div style={{ fontWeight: 800, marginBottom: 6, fontSize: isMobile ? 14 : 16 }}>Filtro por Localidad</div>
           <input
             type="text"
             value={localidadText}
@@ -1206,7 +1450,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ marginTop: 12, color: "#6b7280", fontSize: 12 }}>
+        <div style={{ marginTop: 12, color: "#6b7280", fontSize: 12, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           Tip: Doble clic en el mapa para marcar inicio/destino. Usa “Iniciar” para comenzar navegación y voz.
         </div>
       </aside>
@@ -1214,8 +1458,8 @@ export default function App() {
       {/* Map area */}
       <div style={styles.mapWrap}>
         <MapContainer
-          center={[4.60971, -74.08175]}
-          zoom={12}
+          center={startLoc || [4.60971, -74.08175]}
+          zoom={startLoc ? 14 : 12}
           style={{ height: "100%", width: "100%" }}
           doubleClickZoom={false}
           zoomControl={false}
@@ -1343,7 +1587,11 @@ export default function App() {
           (() => {
             const isActive = isStarted;
             const lvl = isActive ? riskLevel : previewRiskLevel;
-            const clsPanel = bottomMode === "summary" ? riskLevelClass(lvl) : "";
+            const clsPanel = bottomMode === "summary" ? (
+              (lvl.includes("Alto") && "panel-alert-high") ||
+              (lvl.includes("Medio") && "panel-alert-medium") ||
+              (lvl.includes("Bajo") && "panel-alert-low") || ""
+            ) : "";
             const lbl = (lvl.includes("Alto") && "ALTO") || (lvl.includes("Medio") && "MEDIO") || (lvl.includes("Bajo") && "BAJO") || "—";
 
             const data = isActive ? route : previewRoute;
@@ -1359,32 +1607,61 @@ export default function App() {
 
             const showAltBtn = /ALTO|MEDIO/.test(lbl) && startLoc && endLoc;
 
+            // ===== Responsive bottom panel style =====
+            const bottomPanelStyle = {
+              ...styles.bottomPanel,
+              left: isMobile ? 8 : bottomPanelLeft,
+              right: isMobile ? 8 : 12,
+              bottom: isMobile ? "calc(env(safe-area-inset-bottom, 0px) + 8px)" : 14,
+              minWidth: isMobile ? "unset" : styles.bottomPanel.minWidth,
+              width: isMobile ? "auto" : undefined,
+              maxWidth: isMobile ? "unset" : styles.bottomPanel.maxWidth,
+              flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? 10 : 14,
+              padding: isMobile ? 10 : 12,
+              borderRadius: isMobile ? 12 : 14,
+            };
+
+            const instrListStyle = {
+              ...styles.instrList,
+              maxHeight: isMobile ? "34vh" : styles.instrList.maxHeight,
+            };
+
             return (
               <div
-                style={{ ...styles.bottomPanel, left: bottomPanelLeft }}
+                style={bottomPanelStyle}
                 className={`${clsPanel} panel-friendly`}
                 role="region"
                 aria-live="polite"
                 aria-label={bottomMode === "instructions" ? "Indicaciones de la ruta" : "Resumen de la ruta"}
               >
-                <div style={styles.bottomLeft}>
-                  <div className="row" style={{ alignItems: "center" }}>
+                <div style={{ ...styles.bottomLeft }}>
+                  <div className="row" style={{ alignItems: "center", gap: isMobile ? 6 : 8, flexWrap: "wrap" }}>
                     <span className="chip">{isActive ? "🧭 Navegación activa" : "👀 Vista previa"}</span>
-                    <span className="chip">{modeLabel(mode)} {mode === "walk" ? "🚶" : "🚗"}</span>
+                    <span className="chip">{mode === "walk" ? "Caminando 🚶" : "Vehículo 🚗"}</span>
                     <span className={`chip level ${chipPulseClass}`}>
                       <span className={`dot ${levelKey}`} /> Nivel {lbl}
                     </span>
 
                     <span
                       className="chip tab"
-                      style={{ ...styles.chipTab, marginLeft: "auto", borderColor: bottomMode === "instructions" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)", background: bottomMode === "instructions" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)" }}
+                      style={{
+                        ...styles.chipTab,
+                        marginLeft: "auto",
+                        borderColor: bottomMode === "instructions" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)",
+                        background: bottomMode === "instructions" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)"
+                      }}
                       onClick={() => setBottomMode("instructions")}
                     >
                       📜 Indicaciones
                     </span>
                     <span
                       className="chip tab"
-                      style={{ ...styles.chipTab, borderColor: bottomMode === "summary" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)", background: bottomMode === "summary" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)" }}
+                      style={{
+                        ...styles.chipTab,
+                        borderColor: bottomMode === "summary" ? "rgba(96,165,250,0.6)" : "rgba(255,255,255,0.08)",
+                        background: bottomMode === "summary" ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.06)"
+                      }}
                       onClick={() => setBottomMode("summary")}
                     >
                       🧩 Resumen
@@ -1392,7 +1669,7 @@ export default function App() {
                   </div>
 
                   {bottomMode === "instructions" ? (
-                    <div style={styles.instrList}>
+                    <div style={instrListStyle}>
                       {steps.length === 0 ? (
                         <div style={{ color: "#9fb4c9", fontSize: 13 }}>Sin indicaciones disponibles.</div>
                       ) : (
@@ -1434,7 +1711,7 @@ export default function App() {
                       )}
                     </div>
                   ) : (
-                    <div className="advice">
+                    <div className="advice" style={{ fontSize: isMobile ? 14 : 15 }}>
                       {lvl.includes("Alto")
                         ? (mode === "walk"
                           ? "Evita calles poco iluminadas o solas. Mantente en avenidas principales, comparte tu ubicación y considera una ruta alternativa."
@@ -1451,7 +1728,13 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="panel-right">
+                <div className="panel-right" style={{
+                  minWidth: isMobile ? "unset" : 200,
+                  paddingLeft: isMobile ? 0 : 12,
+                  borderLeft: isMobile ? "none" : "1px solid rgba(255,255,255,.06)",
+                  justifyContent: isMobile ? "space-between" : "flex-end",
+                  width: isMobile ? "100%" : "auto",
+                }}>
                   <div className="metric">
                     <div className="label">Distancia</div>
                     <div className="value">{dist}</div>
@@ -1464,7 +1747,7 @@ export default function App() {
                   {showAltBtn && (
                     <button
                       className="btn-alt"
-                      style={{ padding: "8px 10px", borderRadius: 10 }}
+                      style={{ padding: "10px 12px", borderRadius: 10, width: isMobile ? "100%" : "auto" }}
                       onClick={() => {
                         const via = suggestAlternateVia();
                         if (!via) return alert("No encontré una vía alternativa adecuada.");

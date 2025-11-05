@@ -1,10 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+
+    <!-- Viewport móvil con áreas seguras (notch) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+
+    <!-- Colorea la barra del navegador (Android/iOS) -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#0b1224" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#0b1224" />
+
+    <!-- “App-like” en móvil (sin barra de Safari/Chrome al abrir desde Home) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="SafeMap" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Evita que iOS convierta números a links telefónicos automáticamente -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- (Opcional) Si tienes un manifest, descomenta: -->
+    <!-- <link rel="manifest" href="/manifest.webmanifest" /> -->
+
+    <title>SafeMap</title>
+
+    <!-- Estilos base seguros para móvil (altura real + overscroll) -->
+    <style>
+      html, body, #root { height: 100%; }
+      /* Usa 100svh para altura real en móviles modernos, con fallback a 100vh */
+      #root { min-height: 100svh; min-height: 100vh; }
+      body { margin: 0; background: #0b1224; overscroll-behavior: none; }
+      /* Respeta las safe areas (iOS notch) alrededor del root */
+      #root { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+      /* Tip: si no quieres padding visual aquí, lo manejas dentro de tu app (ya lo haces). */
+    </style>
   </head>
   <body>
     <div id="root"></div>
